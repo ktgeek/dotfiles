@@ -1,0 +1,10 @@
+*/*.elc
+*.elc
+.DS_Store
+
+# untracked machine-local zsh overrides, sourced last by .zshenv/.zshrc
+.zsh/.zshenv-local
+.zsh/.zshrc-local
+
+# untracked machine-local ghostty overrides, included last via config-file
+.config/ghostty/config-local

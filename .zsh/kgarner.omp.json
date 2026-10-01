@@ -1,0 +1,233 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "version": 4,
+  "final_space": true,
+  "transient_prompt": {
+    "template": "{{ if gt .Code 0 }}<#c81a1a>❯</>{{ else }}<#4caf00>❯</>{{ end }} "
+  },
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "type": "os",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "232",
+          "background": "7"
+        },
+        {
+          "type": "session",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground_templates": [
+            "{{ if .Root }}196{{ end }}",
+            "3"
+          ],
+          "background": "0",
+          "template": "{{ if or .SSHSession .Root }} {{ .UserName }}{{ if .SSHSession }}@{{ (splitList \".\" .HostName) | first }}{{ end }} {{ end }}"
+        },
+        {
+          "type": "path",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "254",
+          "background": "4",
+          "properties": {
+            "style": "powerlevel",
+            "max_width": 40
+          },
+          "template": " {{ if .Segments.Contains \"Git\" }}{{ if .Segments.Git.RelativeDir }}{{ .Format (printf \"%s/%s\" .Segments.Git.RepoName .Segments.Git.RelativeDir) }}{{ else }}{{ .Format .Segments.Git.RepoName }}{{ end }}{{ else }}{{ .Path }}{{ end }} "
+        },
+        {
+          "type": "git",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "0",
+          "exclude_folders": [
+            "^~$"
+          ],
+          "background_templates": [
+            "{{ if or (.Working.Changed) (.Staging.Changed) }}3{{ end }}",
+            "{{ if gt .StashCount 0 }}3{{ end }}",
+            "2"
+          ],
+          "properties": {
+            "branch_icon": "",
+            "branch_template": "{{ if gt (len .Branch) 35 }}{{ trunc 35 .Branch }}…{{ else }}{{ .Branch }}{{ end }}"
+          },
+          "template": " {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if gt .StashCount 0 }} *{{ .StashCount }}{{ end }}{{ if .Staging.Changed }} +{{ .Staging.String }}{{ end }}{{ if .Working.Changed }} !{{ .Working.String }}{{ end }} "
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "right",
+      "segments": [
+        {
+          "type": "status",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "255",
+          "background": "1",
+          "properties": {
+            "always_enabled": false
+          },
+          "template": " ✘ {{ .Code }} "
+        },
+        {
+          "type": "executiontime",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "0",
+          "background": "3",
+          "properties": {
+            "threshold": 3000,
+            "style": "round"
+          },
+          "template": " {{ .FormattedMs }} "
+        },
+        {
+          "type": "text",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "6",
+          "background": "0",
+          "template": "{{ if and (.Env.POSH_JOBS) (ne .Env.POSH_JOBS \"0\") }}  {{ .Env.POSH_JOBS }} {{ end }}",
+          "alias": "Jobs"
+        },
+        {
+          "type": "ruby",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "255",
+          "background": "1",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "node",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "0",
+          "background": "2",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "npm",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "0",
+          "background": "196",
+          "properties": {
+            "display_mode": "files",
+            "extensions": [
+              "package-lock.json"
+            ]
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "pnpm",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "0",
+          "background": "208",
+          "properties": {
+            "display_mode": "files",
+            "extensions": [
+              "pnpm-lock.yaml"
+            ]
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "yarn",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "0",
+          "background": "33",
+          "properties": {
+            "display_mode": "files",
+            "extensions": [
+              "yarn.lock"
+            ]
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "go",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "0",
+          "background": "6",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "java",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "1",
+          "background": "255",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "aws",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": true,
+          "foreground": "255",
+          "background": "1",
+          "template": "  {{ if .Profile }}{{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}{{ end }} "
+        },
+        {
+          "type": "text",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "invert_powerline": false,
+          "template": "{{ if or (.Segments.Contains \"Status\") (.Segments.Contains \"Executiontime\") (.Segments.Contains \"Jobs\") (.Segments.Contains \"Ruby\") (.Segments.Contains \"Node\") (.Segments.Contains \"Go\") (.Segments.Contains \"Java\") (.Segments.Contains \"Aws\") (.Segments.Contains \"Npm\") (.Segments.Contains \"Pnpm\") (.Segments.Contains \"Yarn\") }}{{ end }}",
+          "alias": "Terminator",
+          "background": "0"
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground_templates": [
+            "{{ if gt .Code 0 }}196{{ end }}",
+            "76"
+          ],
+          "template": "❯"
+        }
+      ]
+    }
+  ]
+}

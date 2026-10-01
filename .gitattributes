@@ -1,0 +1,12 @@
+# Paths listed here stay tracked in this repo (disaster recovery, reuse across
+# Keith's own machines) but are omitted from `git archive` snapshots - see
+# `make publish-public` in the Makefile and "Publishing a public snapshot" in
+# README.md. This is deliberately different from the untracked `-local`
+# convention (.zshenv-local, .zshrc-local, ghostty config-local), which is for
+# genuinely single-machine overrides, not personal-but-shared content.
+
+.ssh/config-personal export-ignore
+.gitconfig-work export-ignore
+.gitconfig-joba export-ignore
+procmailrc.m4 export-ignore
+procmail-base.m4 export-ignore
