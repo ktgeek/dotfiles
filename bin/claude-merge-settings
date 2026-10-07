@@ -1,0 +1,350 @@
+#!/bin/sh
+# claude-merge-settings [--keep-extra|--drop-extra] <fragment.json> <target.json>
+#
+# Merges the gating keys from a settings fragment into an existing Claude Code
+# settings.json, in place, without disturbing anything the fragment doesn't own:
+#
+#   .permissions.ask       - replaced wholesale with the fragment's list, so a rule
+#                             deleted from the fragment actually disappears.
+#                             .permissions.allow / .deny are left untouched.
+#   .statusLine             - replaced wholesale with the fragment's object, same
+#                             treatment as .permissions.ask - Claude Code doesn't offer
+#                             a fragment/include mechanism for this key either, and a
+#                             machine has no legitimate reason to want a different
+#                             statusLine than the one this repo ships.
+#   .hooks.<event>          - handled per hook event the fragment itself uses (today:
+#                             PreToolUse and UserPromptSubmit), each the same way:
+#                             matcher groups the fragment doesn't use are untouched.
+#                             Every matcher group the fragment does use is replaced by
+#                             the fragment's own group for that matcher, plus any local
+#                             hook commands under that matcher not pointing into this
+#                             repo's managed hooks directory ($HOME/.claude/hooks/) and
+#                             the extras prompt below said to keep - appended into that
+#                             same group, never as a second group sharing the matcher.
+#                             A command that DOES point into the managed hooks directory
+#                             is always treated as an older copy of one of this repo's
+#                             own hooks and superseded by the fragment's current entry,
+#                             never offered as a keep/drop extra - even if its exact
+#                             command text has since changed (e.g. a renamed script),
+#                             so a stale reference to an already-relinked-or-removed
+#                             hook script never lingers in settings.json. A hook event
+#                             with no matcher (e.g. UserPromptSubmit) still has a group
+#                             object, just without a .matcher key - treated throughout
+#                             as matcher "" so the same logic applies unchanged. An
+#                             event the fragment doesn't use at all (no key under
+#                             .hooks) is left completely alone, matchers and all.
+#   .autoMode.soft_deny     - additive: the fragment's entries always end up present;
+#                             any entries already on the target but not in the
+#                             fragment ("extras") are kept by default, with an
+#                             interactive keep/delete prompt per extra unless
+#                             --keep-extra/--drop-extra is given. .autoMode.environment
+#                             is untouched.
+#
+# Writes via a temp file + mv (atomic) after jq has validated the result, and only
+# if the result actually differs from what's already there. Backs up the previous
+# file to <target>.bak first. Fails loudly (nonzero exit, no write) if jq is missing
+# or the existing target isn't valid JSON.
+#
+# Extras prompting (soft_deny rules and hook commands alike) reads/writes /dev/tty,
+# not stdin/stdout, so it works whether or not the caller (e.g. `make`) has wired up
+# stdin. If /dev/tty can't be opened (non-interactive run, no flag given), extras are
+# kept and a notice is printed naming each one, rather than hanging or silently
+# discarding local config.
+#
+# No state is kept about past answers: an extra that's kept is still an extra next
+# run, and gets asked about again. That's intentional - see AGENTS.md.
+
+set -eu
+
+extra_mode=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--keep-extra)
+		extra_mode="keep"
+		shift
+		;;
+	--drop-extra)
+		extra_mode="drop"
+		shift
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		echo "claude-merge-settings: unknown option: $1" >&2
+		exit 2
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+if [ $# -ne 2 ]; then
+	echo "usage: claude-merge-settings [--keep-extra|--drop-extra] <fragment.json> <target.json>" >&2
+	exit 2
+fi
+
+fragment=$1
+target=$2
+
+command -v jq >/dev/null 2>&1 || {
+	echo "claude-merge-settings: jq is required but not found on PATH" >&2
+	exit 1
+}
+
+[ -f "$fragment" ] || {
+	echo "claude-merge-settings: fragment not found: $fragment" >&2
+	exit 1
+}
+
+jq empty "$fragment" 2>/dev/null || {
+	echo "claude-merge-settings: fragment is not valid JSON: $fragment" >&2
+	exit 1
+}
+
+fragment_json=$(cat "$fragment")
+
+if [ -e "$target" ]; then
+	jq empty "$target" 2>/dev/null || {
+		echo "claude-merge-settings: existing target is not valid JSON, refusing to touch it: $target" >&2
+		exit 1
+	}
+	target_json=$(cat "$target")
+else
+	target_json='{}'
+fi
+
+# select_by_index <array_json> <indices_json> -> JSON array of the elements of
+# <array_json> at the positions listed in <indices_json>. Shared by both extras
+# categories to turn the indices prompt_extras returns back into values.
+select_by_index() {
+	jq -cn --argjson arr "$1" --argjson idx "$2" '[$idx[] as $i | $arr[$i]]'
+}
+
+# prompt_extras <noun-phrase> <labels_json> -> JSON array of the indices (into
+# <labels_json>) to keep, printed on stdout.
+#
+# <labels_json> is a JSON array of human-readable strings, one per extra, in
+# display order - already deduplicated by the caller, so a value that appears
+# more than once physically is only ever asked about once (an identical
+# "keep this one, drop that one" split on the same value has no sensible
+# meaning, and asking twice would let the two answers silently race in
+# whatever filters on the result afterward). <noun-phrase> completes "this
+# machine has N <noun-phrase>." for the interactive intro.
+#
+# Honors the global --keep-extra/--drop-extra short-circuits. Otherwise opens
+# /dev/tty read-write on fd 3 and probes it by actually opening it, not just by
+# testing permission bits: a detached/sandboxed process can have a /dev/tty
+# node that looks readable and writable per `test -r`/`-w` yet fails to open
+# (no controlling terminal - ENXIO/ENOTTY), and under `set -e` a failed
+# redirection would otherwise abort the whole script mid-merge, before
+# anything is written. With no /dev/tty and no flag given, every extra is kept
+# and named on stderr instead.
+prompt_extras() {
+	local noun_phrase labels_json count tty_ok kept_indices i idx label answer
+
+	noun_phrase=$1
+	labels_json=$2
+	count=$(printf '%s' "$labels_json" | jq 'length')
+
+	if [ "$count" -eq 0 ]; then
+		echo '[]'
+		return 0
+	fi
+
+	case "$extra_mode" in
+	keep)
+		jq -cn --argjson n "$count" '[range($n)]'
+		return 0
+		;;
+	drop)
+		echo '[]'
+		return 0
+		;;
+	esac
+
+	tty_ok=0
+	if { exec 3<>/dev/tty; } 2>/dev/null; then
+		tty_ok=1
+	fi
+	if [ "$tty_ok" -eq 1 ]; then
+		echo "claude-merge-settings: this machine has $count $noun_phrase." >&3
+		echo "" >&3
+		kept_indices='[]'
+		i=0
+		while [ "$i" -lt "$count" ]; do
+			label=$(printf '%s' "$labels_json" | jq -r ".[$i]")
+			idx=$((i + 1))
+			printf '  [%d/%d] %s\n\n' "$idx" "$count" "$label" >&3
+			printf '        Keep it? [K/d] ' >&3
+			answer=""
+			read -r answer <&3 || answer=""
+			case "$answer" in
+			[dD]*) ;;
+			*)
+				kept_indices=$(printf '%s' "$kept_indices" | jq -c --argjson i "$i" '. + [$i]')
+				;;
+			esac
+			echo "" >&3
+			i=$idx
+		done
+		exec 3<&-
+		printf '%s' "$kept_indices"
+	else
+		echo "claude-merge-settings: non-interactive (no /dev/tty); keeping $count $noun_phrase:" >&2
+		printf '%s' "$labels_json" | jq -r '.[] | "  - " + .' >&2
+		echo "claude-merge-settings: re-run interactively, or with --drop-extra, to prune." >&2
+		jq -cn --argjson n "$count" '[range($n)]'
+	fi
+}
+
+# soft_deny extras = target's entries not present in the fragment's, deduped
+# in first-seen order (see prompt_extras) in case the target already has an
+# internal duplicate - plain `unique`/`unique_by` would work too but silently
+# re-sort the list, which would reorder a human's local rules for no reason.
+# jq's array `-` also collapses a duplicate "$defaults" for free.
+soft_deny_extras_json=$(jq -cn --argjson f "$fragment_json" --argjson t "$target_json" '
+	(($t.autoMode.soft_deny // []) - ($f.autoMode.soft_deny // []))
+	| reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end)
+')
+kept_soft_deny_idx=$(prompt_extras "autoMode.soft_deny rule(s) not in the repo fragment" "$soft_deny_extras_json")
+kept_soft_deny_json=$(select_by_index "$soft_deny_extras_json" "$kept_soft_deny_idx")
+
+managed_hook_prefix='$HOME/.claude/hooks/'
+
+# Every hook event the fragment itself uses (today: PreToolUse, UserPromptSubmit),
+# in the fragment's own JSON order (keys_unsorted, not keys - alphabetizing would
+# just reorder the merged settings.json for no reason). An event absent from the
+# fragment's .hooks is never touched below, matchers and all.
+frag_events_json=$(jq -cn --argjson f "$fragment_json" '$f.hooks // {} | keys_unsorted')
+
+# Built up one event at a time into {"<event>": [<merged groups>], ...}, then
+# spliced into .hooks wholesale at the very end alongside every OTHER event
+# already on the target (one the fragment doesn't use, and so never iterates
+# over here) untouched.
+merged_hooks_json='{}'
+
+for event in $(printf '%s' "$frag_events_json" | jq -r '.[]'); do
+	# A hook group has a .matcher key only when the event is tool-scoped
+	# (PreToolUse); an event like UserPromptSubmit that isn't attached to a
+	# specific tool has groups with no .matcher at all. Normalized to "" here
+	# so every event is merged by the identical matcher-keyed logic below.
+	frag_matchers_json=$(jq -cn --argjson f "$fragment_json" --arg event "$event" '
+		$f.hooks[$event] // [] | map(.matcher // "")
+	')
+
+	# hook extras = target hook commands sitting under a matcher the fragment
+	# also uses for this event, excluding anything pointing into this repo's
+	# managed hooks directory ($HOME/.claude/hooks/, per the skill's convention
+	# that every hook command is a plain, argument-free path there) - those are
+	# always ours, silently superseded by the fragment's current entry for that
+	# matcher regardless of whether their exact command text still matches (see
+	# the .hooks.<event> note up top). Deduped in first-seen order by {matcher,
+	# command} for the same reason soft_deny extras are. The full hook object
+	# (command plus type/statusMessage/etc.) rides along under `.hook` so a
+	# kept extra can be spliced back into the fragment's group unchanged. A
+	# hook object counts as usable only if `.command` is present *and* a
+	# string - `startswith` below would otherwise abort the whole merge on a
+	# non-string value, and a hook with no runnable command can't be
+	# classified as "ours" or "foreign" either way. An unusable entry is
+	# dropped with a notice below (see malformed_hook_count) rather than
+	# silently or via a keep/drop prompt, since settings.json is rewritten by
+	# Claude Code itself (not just this script) and its shape isn't otherwise
+	# guaranteed at merge time.
+	hook_extras_json=$(jq -cn \
+		--argjson t "$target_json" \
+		--argjson frag_matchers "$frag_matchers_json" \
+		--arg managed_prefix "$managed_hook_prefix" \
+		--arg event "$event" \
+		'
+		($t.hooks[$event] // [])
+		| [.[] | (.matcher // "") as $m | select($frag_matchers | index($m) != null)
+		     | (.hooks // [])[]
+		     | select(has("command") and (.command | type == "string"))
+		     | select(.command | startswith($managed_prefix) | not)
+		     | {matcher: $m, command: .command, hook: .}]
+		| reduce .[] as $x ([]; if any(.[]; .matcher == $x.matcher and .command == $x.command) then . else . + [$x] end)
+	')
+	hook_extras_labels_json=$(printf '%s' "$hook_extras_json" \
+		| jq -c --arg event "$event" '[.[] | $event + "[" + .matcher + "]: " + .command]')
+	hook_extras_noun="$event hook command(s) under a claimed matcher not in the repo fragment"
+	kept_hook_extras_idx=$(prompt_extras "$hook_extras_noun" "$hook_extras_labels_json")
+	kept_hook_extras_json=$(select_by_index "$hook_extras_json" "$kept_hook_extras_idx")
+
+	# Same "usable" test as above (see comment there), inverted: entries a hook
+	# object has that don't qualify as either "ours" or an extra at all.
+	malformed_hook_count=$(jq -cn \
+		--argjson t "$target_json" \
+		--argjson frag_matchers "$frag_matchers_json" \
+		--arg event "$event" \
+		'
+		[($t.hooks[$event] // [])[] | (.matcher // "") as $m | select($frag_matchers | index($m) != null)
+		 | (.hooks // [])[] | select((has("command") and (.command | type == "string")) | not)] | length
+	')
+	if [ "$malformed_hook_count" -gt 0 ]; then
+		echo "claude-merge-settings: dropping $malformed_hook_count malformed $event hook" \
+			"entry(s) under a claimed matcher (missing or non-string .command)" >&2
+	fi
+
+	event_groups_json=$(jq -cn \
+		--argjson f "$fragment_json" \
+		--argjson t "$target_json" \
+		--argjson frag_matchers "$frag_matchers_json" \
+		--argjson kept_hook_extras "$kept_hook_extras_json" \
+		--arg event "$event" \
+		'
+		($f.hooks[$event] // []) as $frag_groups
+		| ($t.hooks[$event] // []) as $target_groups
+		| ($target_groups | map(select((.matcher // "") as $m | ($frag_matchers | index($m)) == null))) as $unclaimed_groups
+		# Kept extras go into only the FIRST fragment group for their matcher, not
+		# every group sharing it - the fragment is expected to have one group per
+		# matcher, but nothing stops it from ever having two, and splicing into
+		# both would duplicate (and double-fire) the same local hook.
+		| (reduce $frag_groups[] as $g
+			({seen: [], out: []};
+				($g.matcher // "") as $m
+				| if (.seen | index($m)) != null then
+					.out += [$g]
+				else
+					($kept_hook_extras | map(select(.matcher == $m) | .hook)) as $extra_hooks
+					| .out += [$g + {hooks: (($g.hooks // []) + $extra_hooks)}]
+					| .seen += [$m]
+				end)
+		  | .out) as $frag_groups_with_extras
+		| $unclaimed_groups + $frag_groups_with_extras
+		')
+	merged_hooks_json=$(jq -cn \
+		--argjson acc "$merged_hooks_json" \
+		--argjson groups "$event_groups_json" \
+		--arg event "$event" \
+		'$acc + {($event): $groups}')
+done
+
+merged=$(jq -cn \
+	--argjson f "$fragment_json" \
+	--argjson t "$target_json" \
+	--argjson kept_soft_deny "$kept_soft_deny_json" \
+	--argjson merged_hooks "$merged_hooks_json" \
+	'
+	$t
+	| .permissions = ((.permissions // {}) + {ask: $f.permissions.ask})
+	| .statusLine = $f.statusLine
+	| .hooks = ((.hooks // {}) + $merged_hooks)
+	| .autoMode = ((.autoMode // {}) + {soft_deny: ($f.autoMode.soft_deny + $kept_soft_deny)})
+	')
+
+if [ -e "$target" ] && [ "$(printf '%s' "$target_json" | jq -Sc .)" = "$(printf '%s' "$merged" | jq -Sc .)" ]; then
+	echo "claude-merge-settings: $target already up to date, nothing written"
+	exit 0
+fi
+
+if [ -e "$target" ]; then
+	cp "$target" "$target.bak"
+fi
+
+tmp="$target.tmp.$$"
+printf '%s' "$merged" | jq . >"$tmp"
+mv "$tmp" "$target"
+echo "claude-merge-settings: merged $fragment into $target (previous copy: $target.bak)"

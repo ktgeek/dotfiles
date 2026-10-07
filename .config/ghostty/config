@@ -1,0 +1,110 @@
+# Colors - palette, background, and selection come from Ghostty's built-in
+# Vibrant Ink theme (a classic iTerm2/TextMate-era preset)
+# theme = Vibrant Ink
+theme = IBM 5153 CGA (Black)
+
+# iTerm2 had `Use Bright Bold` on. Note this is bold-color, NOT
+# bold-is-bright - that option does not exist.
+bold-color = bright
+
+# iTerm2: MesloLGSNFM-Regular 11. Repeated font-family builds a fallback
+# chain; only the Homebrew font-meslo-lg-nerd-font entry is installed by
+# this repo, and install-linux-packages ships no Nerd Font at all, hence
+# the tail of the list.
+font-family = MesloLGS Nerd Font Mono
+font-family = FiraCode Nerd Font Mono
+font-family = Fira Code
+font-family = DejaVu Sans Mono
+font-size = 11
+
+# Columns 120, Rows 35
+window-width = 140
+window-height = 50
+
+# iTerm2: Transparency 0.15, i.e. opacity 0.85. Originally set to 0.92
+# here on a guess that Ghostty composites differently - a side-by-side
+# screenshot showed that guess was wrong (Ghostty came out MORE opaque
+# than iTerm2, not less), so this is the literal iTerm2 value. Blur is
+# macOS-only in practice; on Linux it needs a cooperating compositor and
+# is otherwise inert.
+background-opacity = 0.85
+background-blur = 2
+
+# iTerm2 bound Toggle Transparency to Cmd-U; Ghostty has the action but
+# binds nothing by default. macOS-only, per the action's own docs.
+keybind = super+u=toggle_background_opacity
+
+# iTerm2: Blinking Cursor off (Ghostty defaults to on). Cursor Type 2 =
+# box, which is already Ghostty's default, so cursor-style is omitted.
+cursor-style-blink = false
+
+# iTerm2: FocusFollowsMouse. Not a faithful port: Ghostty's option only moves
+# focus between split panes within the already-focused window - mousing over
+# an unfocused Ghostty window does not raise/focus it, unlike iTerm2's
+# window-level behavior (confirmed against `ghostty +show-config --default
+# --docs`, 1.3.1). True OS-level sloppy focus needs a third-party tool
+# (Hammerspoon, yabai) - none installed here as of this writing.
+focus-follows-mouse = true
+
+# iTerm2: CopySelection. Ghostty's default (true) already means "on"
+# here, but on Linux `true` prefers the X11 primary selection, which
+# iTerm2 has no concept of. `clipboard` forces the system clipboard on
+# both platforms - the faithful, same-everywhere port.
+copy-on-select = clipboard
+
+# iTerm2: DimInactiveSplitPanes with SplitPaneDimmingAmount 0.4
+unfocused-split-opacity = 0.6
+
+# iTerm2: QuitWhenAllWindowsClosed. Ghostty's default differs by platform
+# (true on Linux, false on macOS), so state it to get one behaviour.
+quit-after-last-window-closed = true
+
+# iTerm2: OpenNoWindowsAtStartup
+# initial-window = false
+
+# iTerm2: Option Key Sends / Right Option Key Sends both = 2 (Esc+)
+macos-option-as-alt = true
+
+# Not an iTerm2 port - macOS titlebars show a "proxy icon" for the current
+# working directory (drag it, or Cmd-click the title, to navigate). Hidden
+# by request. Ghostty's docs say this only applies to the native titlebar
+# style, but it was visibly showing under this config's default
+# (macos-titlebar-style = transparent, unset here) too.
+macos-titlebar-proxy-icon = hidden
+
+# Hover link previews are new chrome with no iTerm2 counterpart.
+link-previews = false
+
+# Not an iTerm2 port - Ghostty's shell integration has its own `title`
+# feature (on by default) that sets the window title itself: the raw
+# command on preexec, the truncated cwd on precmd. Its hooks get appended
+# to preexec_functions/precmd_functions *after* Zim's termtitle module's
+# (Ghostty's injection defers its real hook registration to the first
+# precmd, which only fires once .zshrc has already run), so it always ran
+# last and clobbered termtitle's `<user@host> dir` title. Disabling just
+# this feature leaves termtitle as the only thing setting the title; the
+# other shell-integration features (cwd reporting, cursor shape, etc.) are
+# untouched.
+shell-integration-features = no-title
+
+# NOT ported, recorded here in case it's wanted back: iTerm2's
+# WordCharacters was empty, so double-click selected only alphanumeric
+# runs - no paths, no hyphenated words. Ghostty's default word set is
+# more useful in a terminal. To restore the old behaviour:
+#   selection-word-chars = ""
+# (needs Ghostty >= 1.3.0)
+
+# Not an iTerm2 port - new windows were opening in whatever directory the
+# previously-focused window happened to be in. window-inherit-working-directory
+# is Ghostty's default source of that behavior; turning it off makes every new
+# window fall back to working-directory instead, which needs setting explicitly
+# to `home` since its own default (`inherit`) would otherwise just pick up the
+# cwd of the launching Ghostty process itself, not the home directory.
+window-inherit-working-directory = false
+working-directory = home
+
+# Machine-specific overrides, mirroring .zshenv-local / .zshrc-local.
+# The ? makes it optional. Paths in config-file resolve relative to the
+# file containing the directive - which is the repo, since ~/.config/ghostty
+# is a symlink into it.
+config-file = ?config-local

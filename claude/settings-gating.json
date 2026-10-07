@@ -1,0 +1,120 @@
+{
+  "permissions": {
+    "ask": [
+      "Artifact",
+      "CronCreate",
+      "CronDelete",
+      "PushNotification",
+      "RemoteTrigger",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
+      "Bash(git revert:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git tag:*)",
+      "Bash(git clean:*)",
+      "Bash(git branch -d:*)",
+      "Bash(git branch -D:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr review:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh release:*)",
+      "Bash(rm:*)",
+      "Bash(rmdir:*)",
+      "Bash(mv:*)",
+      "Bash(pnpm publish:*)",
+      "Bash(npm publish:*)",
+      "Bash(docker push:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(terraform apply:*)",
+      "Bash(terraform destroy:*)",
+      "mcp__claude_ai_Linear__save_*",
+      "mcp__claude_ai_Linear__create_*",
+      "mcp__claude_ai_Linear__delete_*",
+      "mcp__claude_ai_Linear__update_*",
+      "mcp__claude_ai_Linear__retire_*",
+      "mcp__claude_ai_Linear__restore_*",
+      "mcp__claude_ai_Linear__merge_diff",
+      "mcp__claude_ai_Linear__submit_diff_review",
+      "mcp__claude_ai_Linear__resolve_diff_thread",
+      "mcp__claude_ai_Linear__share_issue",
+      "mcp__claude_ai_Linear__unshare_issue",
+      "mcp__claude_ai_Linear__mark_notification",
+      "mcp__claude_ai_Linear__prepare_attachment_upload",
+      "mcp__claude_ai_Slack__slack_send_message",
+      "mcp__claude_ai_Slack__slack_send_message_draft",
+      "mcp__claude_ai_Slack__slack_schedule_message",
+      "mcp__claude_ai_Slack__slack_add_reaction",
+      "mcp__claude_ai_Slack__slack_create_*",
+      "mcp__claude_ai_Slack__slack_update_*",
+      "mcp__claude_ai_Slack__slack_add_list_record",
+      "mcp__claude_ai_Slack__slack_get_file_upload_url",
+      "mcp__claude_ai_Slack__slack_complete_file_upload",
+      "mcp__claude_ai_Google_Drive__create_file",
+      "mcp__claude_ai_Google_Drive__update_file",
+      "mcp__claude_ai_Google_Drive__copy_file",
+      "mcp__claude_ai_Google_Drive__share_file",
+      "mcp__claude_ai_Google_Drive__trash_file",
+      "mcp__claude_ai_Claude_Docs__create",
+      "mcp__claude_ai_Claude_Docs__update",
+      "mcp__claude_ai_Claude_Docs__delete",
+      "mcp__claude_ai_Claude_Docs__batch"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.claude/statusline.sh",
+    "padding": 0
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/write-scope-ask.sh",
+            "statusMessage": "Checking write scope"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/gh-api-write-ask.sh",
+            "statusMessage": "Checking gh api call"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/edit-gate-toggle.sh",
+            "statusMessage": "Checking edit-gate toggle"
+          }
+        ]
+      }
+    ]
+  },
+  "autoMode": {
+    "soft_deny": [
+      "$defaults",
+      "Posting, publishing, or sending model-generated text outside this machine — chat messages, tickets, comments, PR or issue bodies, hosted pages, documents — through any connector, MCP server, or CLI, including tools added after this rule was written. Keith reviews outbound generated content before it is sent. Claude Code's own working files (session scratchpad, plan files, auto-memory, ~/.claude) are exempt from this rule.",
+      "Bash(cp:*) that would overwrite an existing destination file, or write outside the current working directory and outside the session scratchpad — treat as review-worthy, the same as other irreversible file operations. A plain copy to a new filename inside the working tree or scratchpad (e.g. a .bak sibling, or copying a file into the scratchpad for inspection) needs no confirmation.",
+      "Bash commands that create, modify, or remove anything under ~/.local/state/claude-edit-gate/ — that directory holds write-scope-ask.sh's per-session edit-gate sentinels (see the edit-gate-toggle.sh hook), and the gate is meant to be flipped only by Keith typing 'edit-gate off'/'edit-gate on', never by a tool call."
+    ]
+  }
+}

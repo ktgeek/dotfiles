@@ -1,0 +1,187 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "version": 4,
+  "final_space": true,
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "type": "claude",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "255",
+          "background": "54",
+          "template": " 󰯉 {{ .Model.DisplayName }} "
+        },
+        {
+          "type": "claude",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "255",
+          "background": "54",
+          "template": "{{ if .Effort }}  {{ .Effort.Level }} {{ end }}"
+        },
+        {
+          "type": "path",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "254",
+          "background": "4",
+          "properties": {
+            "style": "powerlevel",
+            "max_width": 60
+          },
+          "template": " {{ $p := .Path }}{{ if .Segments.Contains \"Git\" }}{{ if .Segments.Git.RelativeDir }}{{ $p = .Format (printf \"%s/%s\" .Segments.Git.RepoName .Segments.Git.RelativeDir) }}{{ else }}{{ $p = .Format .Segments.Git.RepoName }}{{ end }}{{ end }}{{ if gt (len $p) 60 }}…{{ trunc -59 $p }}{{ else }}{{ $p }}{{ end }} "
+        },
+        {
+          "type": "git",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "0",
+          "exclude_folders": [
+            "^~$"
+          ],
+          "background_templates": [
+            "{{ if or (.Working.Changed) (.Staging.Changed) }}3{{ end }}",
+            "{{ if gt .StashCount 0 }}3{{ end }}",
+            "2"
+          ],
+          "properties": {
+            "branch_icon": "",
+            "branch_template": "{{ if gt (len .Branch) 35 }}{{ trunc 35 .Branch }}…{{ else }}{{ .Branch }}{{ end }}"
+          },
+          "template": " {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if gt .StashCount 0 }} *{{ .StashCount }}{{ end }}{{ if .Staging.Changed }} +{{ .Staging.String }}{{ end }}{{ if .Working.Changed }} !{{ .Working.String }}{{ end }} "
+        },
+        {
+          "type": "claude",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "0",
+          "background": "6",
+          "template": "{{ if .PR }}  #{{ .PR.Number }}{{ if .PR.ReviewState }} ({{ .PR.ReviewState }}){{ end }} {{ end }}"
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "text",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "255",
+          "background": "196",
+          "template": "{{ if eq .Env.CLAUDE_EDIT_GATE \"off\" }}  edits ungated  {{ end }}"
+        },
+        {
+          "type": "claude",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "232",
+          "background": "2",
+          "background_templates": [
+            "{{ if and .RateLimits .RateLimits.FiveHour }}{{ if ge .FiveHourUsage 90 }}196{{ end }}{{ end }}",
+            "{{ if and .RateLimits .RateLimits.FiveHour }}{{ if ge .FiveHourUsage 70 }}208{{ end }}{{ end }}"
+          ],
+          "template": "{{ if and .RateLimits .RateLimits.FiveHour }}  5h {{ .FiveHourGauge }} {{ .FiveHourUsage.String }}% {{ end }}"
+        },
+        {
+          "type": "claude",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "232",
+          "background": "2",
+          "background_templates": [
+            "{{ if ge .TokenUsagePercent 90 }}196{{ end }}",
+            "{{ if ge .TokenUsagePercent 70 }}208{{ end }}"
+          ],
+          "template": "  {{ .TokenGaugeUsed }} {{ .FormattedTokens }}/{{ if ge .ContextWindow.ContextWindowSize 1000000 }}{{ div .ContextWindow.ContextWindowSize 1000000 }}M{{ else }}{{ div .ContextWindow.ContextWindowSize 1000 }}k{{ end }} ({{ .TokenUsagePercent.String }}%) "
+        },
+        {
+          "type": "claude",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "foreground": "0",
+          "background": "8",
+          "template": "{{ if and .OutputStyle (ne .OutputStyle.Name \"default\") }}  {{ .OutputStyle.Name }} {{ end }}"
+        },
+        {
+          "type": "ruby",
+          "style": "plain",
+          "foreground": "1",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "node",
+          "style": "plain",
+          "foreground": "2",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "npm",
+          "style": "plain",
+          "foreground": "196",
+          "properties": {
+            "display_mode": "files",
+            "extensions": [
+              "package-lock.json"
+            ]
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "pnpm",
+          "style": "plain",
+          "foreground": "208",
+          "properties": {
+            "display_mode": "files",
+            "extensions": [
+              "pnpm-lock.yaml"
+            ]
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "yarn",
+          "style": "plain",
+          "foreground": "33",
+          "properties": {
+            "display_mode": "files",
+            "extensions": [
+              "yarn.lock"
+            ]
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "go",
+          "style": "plain",
+          "foreground": "6",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        },
+        {
+          "type": "java",
+          "style": "plain",
+          "foreground": "255",
+          "properties": {
+            "display_mode": "files"
+          },
+          "template": "  {{ .Full }} "
+        }
+      ]
+    }
+  ]
+}
