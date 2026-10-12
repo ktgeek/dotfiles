@@ -1,0 +1,35 @@
+zmodule environment
+zmodule input
+zmodule utility
+zmodule run-help
+zmodule termtitle
+zmodule git
+zmodule archive
+zmodule MichaelAquilina/zsh-you-should-use
+# macOS already loads keys via AddKeysToAgent in .ssh/config.
+zmodule ssh --if-ostype 'linux*'
+
+# ohmyzsh is a big repo; --use degit avoids a full clone.
+zmodule ohmyzsh/ohmyzsh --root plugins/docker-compose --use degit --if-command docker
+zmodule ohmyzsh/ohmyzsh --root plugins/gnu-utils --if-ostype 'darwin*'
+
+zmodule zsh-users/zsh-completions --fpath src
+zmodule completion
+# fzf-tab needs compinit (above) to have already run, but must load before any
+# widget-wrapping plugin - i.e. before the block below - per its own README.
+zmodule Aloxaf/fzf-tab
+# Needs fzf >= 0.48 (`fzf --zsh`); silently skipped if fzf isn't installed. Must
+# load after fzf-tab, whose init captures what Tab is bound to, and before the
+# widget-wrapping block below so it sees fzf's widgets.
+zmodule fzf
+
+# docker and chruby need compinit (above) for _comps/compdef.
+zmodule ohmyzsh/ohmyzsh --root plugins/docker --if-command docker
+zmodule ohmyzsh/ohmyzsh --root plugins/chruby --if '(( ${+functions[chruby]} ))'
+# Defines a zle widget, so must load before the widget-wrapping block below.
+zmodule ohmyzsh/ohmyzsh --root plugins/sudo
+
+# Order below is required by zim and must not be rearranged.
+zmodule zsh-users/zsh-syntax-highlighting
+zmodule zsh-users/zsh-history-substring-search
+zmodule zsh-users/zsh-autosuggestions

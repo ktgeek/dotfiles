@@ -1,0 +1,95 @@
+theme = IBM 5153 CGA (Black)
+
+# Bold text uses the bright palette color. This is bold-color, NOT
+# bold-is-bright - that option does not exist.
+bold-color = bright
+
+# Repeated font-family builds a fallback chain; only the Homebrew
+# font-meslo-lg-nerd-font entry is installed by this repo, and
+# install-linux-packages ships no Nerd Font at all, hence the tail of the
+# list.
+font-family = MesloLGS Nerd Font Mono
+font-family = FiraCode Nerd Font Mono
+font-family = Fira Code
+font-family = DejaVu Sans Mono
+font-size = 11
+
+window-width = 140
+window-height = 50
+
+# Blur is macOS-only in practice; on Linux it needs a cooperating
+# compositor and is otherwise inert.
+background-opacity = 0.85
+background-blur = 2
+
+# macOS-only, per the action's own docs.
+keybind = super+u=toggle_background_opacity
+
+# Ghostty's cursor blinks by default.
+cursor-style-blink = false
+
+# Only moves focus between split panes within the already-focused window -
+# mousing over an unfocused Ghostty window does not raise/focus it
+# (confirmed against `ghostty +show-config --default --docs`, 1.3.1). True
+# OS-level sloppy focus needs a third-party tool (Hammerspoon, yabai) -
+# none installed here as of this writing.
+focus-follows-mouse = true
+
+# On Linux the default (`true`) prefers the X11 primary selection;
+# `clipboard` forces the system clipboard on both platforms.
+copy-on-select = clipboard
+
+unfocused-split-opacity = 0.6
+
+# Ghostty's default differs by platform (true on Linux, false on macOS),
+# so state it to get one behaviour.
+quit-after-last-window-closed = true
+
+macos-option-as-alt = true
+
+# macOS titlebars show a "proxy icon" for the current working directory
+# (drag it, or Cmd-click the title, to navigate). Ghostty's docs say hiding
+# it only applies to the native titlebar style, but it was visibly showing
+# under this config's default (macos-titlebar-style = transparent, unset
+# here) too.
+macos-titlebar-proxy-icon = hidden
+
+# link-previews = false
+link-previews = true
+
+# Ghostty's shell integration has its own `title` feature (on by default)
+# that sets the window title itself: the raw command on preexec, the
+# truncated cwd on precmd. Its hooks get appended to
+# preexec_functions/precmd_functions *after* Zim's termtitle module's
+# (Ghostty's injection defers its real hook registration to the first
+# precmd, which only fires once .zshrc has already run), so it always ran
+# last and clobbered termtitle's `<user@host> dir` title. `no-title`
+# leaves termtitle as the only thing setting the title.
+#
+# The rest opt in to the remote-session helpers, which are off by default:
+# `sudo` keeps xterm-ghostty's terminfo visible under sudo, `ssh-env`
+# forwards COLORTERM/TERM_PROGRAM and falls back to TERM=xterm-256color
+# on hosts that lack the terminfo entry, and `ssh-terminfo` installs the
+# entry on the remote host on first connect. Features not listed here
+# (cwd reporting, cursor shape, etc.) keep their defaults.
+shell-integration-features = "no-title,sudo,ssh-env,ssh-terminfo"
+
+# Ghostty's default word set for double-click selection also matches paths
+# and hyphenated words, which is more useful in a terminal than selecting
+# only alphanumeric runs. To select only alphanumeric runs instead:
+#   selection-word-chars = ""
+# (needs Ghostty >= 1.3.0)
+
+# By default new windows open in the directory of the previously-focused
+# window. Turning that off makes every new window fall back to
+# working-directory, which needs setting explicitly to `home` since its own
+# default (`inherit`) would otherwise pick up the cwd of the launching
+# Ghostty process itself, not the home directory.
+window-inherit-working-directory = false
+working-directory = home
+
+# Machine-specific overrides, mirroring .zshenv-local / .zshrc-local.
+# The ? makes it optional. Paths in config-file resolve relative to the
+# file containing the directive - which is the repo, since ~/.config/ghostty
+# is a symlink into it.
+config-file = ?config-local

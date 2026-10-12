@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# This creates tags that will work with the vscode extention ctagsx https://github.com/jtanx/ctagsx
+set -o errexit
+
+if [ -e ~/.dontctag ]; then
+  exit 0
+fi
+
+(
+    flock -w 60 200
+
+    set -e
+    trap "rm -f tags.$$" EXIT
+    ctags --extra=f --tag-relative -Rftags.$$ \
+          --exclude=.git \
+          --exclude=node_modules \
+          --exclude=public/dist \
+          --exclude=vendor/bundle \
+          --exclude=tmp
+    mv tags.$$ tags
+) 200>~/.vstags.ktg.lock
+
+# also see http://tbaggery.com/2011/08/08/effortless-ctags-with-git.html

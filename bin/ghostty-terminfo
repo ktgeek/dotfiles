@@ -1,0 +1,239 @@
+#!/bin/bash
+
+# Makes the xterm-ghostty terminfo entry resolvable to processes Ghostty
+# didn't launch directly - tmux started from a login shell, `ssh -t` back
+# into this box, etc. Not installed anywhere by the Makefile; run it from
+# the repo root as needed. `install-ghostty-terminfo` wraps the `local`
+# subcommand only, since it's the one that needs no argument.
+#
+#   bin/ghostty-terminfo local          # compile it into ~/.terminfo here
+#   bin/ghostty-terminfo push HOST...   # push it to one or more remote hosts
+#
+# Ghostty's own terminfo entry usually isn't in the system terminfo db -
+# only `ghostty`'s own bundled copy has it - so both subcommands need a way
+# to get at the description before they can hand it to `tic`.
+#
+# `push` prefers running `tic` on the remote host, but falls back to
+# copying Ghostty's precompiled xterm-ghostty entry when the remote has no
+# `tic` at all - e.g. OpenWrt, whose ncurses is built `--without-progs`
+# (ships the terminfo database and libncurses, but no tic/infocmp/tput, and
+# no package adds them - the same constraint the `tput` shim in `.zshrc`
+# works around). The compiled terminfo format is endian-independent, so the
+# bundled file is portable as-is; no `tic` is needed on either end for that
+# path. `local` has no such fallback - a tic-less machine is told to run
+# `push` from the machine that has Ghostty (or ncurses tools) instead.
+
+set -o errexit
+set -o nounset
+
+# macOS locations Ghostty.app might be installed at. Checked in order;
+# first one whose terminfo dir exists wins.
+MAC_APP_CANDIDATES=(
+  "/Applications/Ghostty.app"
+  "${HOME}/Applications/Ghostty.app"
+)
+
+usage() {
+  echo "usage: $0 local" >&2
+  echo "       $0 push HOST [HOST...]" >&2
+  exit 1
+}
+
+have() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Set by resolve_compiled_entry if it has to compile an entry into a temp
+# dir; cleaned up on exit either way.
+COMPILED_WORKDIR=""
+cleanup_workdir() {
+  # Must always exit 0: an EXIT trap's own exit status becomes the
+  # script's, and the plain "-n" test is false (i.e. non-zero) on the
+  # common path where no workdir was ever created.
+  if [ -n "$COMPILED_WORKDIR" ]; then
+    rm -rf "$COMPILED_WORKDIR"
+  fi
+  return 0
+}
+trap cleanup_workdir EXIT
+
+# Prints the xterm-ghostty terminfo description on stdout, trying (in
+# order): the system terminfo db, then each macOS app-bundle candidate's
+# bundled copy. Fails loudly, naming every location tried, if none work.
+resolve_description() {
+  local desc
+  if desc=$(infocmp -x xterm-ghostty 2>/dev/null); then
+    printf '%s\n' "$desc"
+    return 0
+  fi
+
+  local tried="the system terminfo db (infocmp -x xterm-ghostty)"
+  local app dir
+  for app in "${MAC_APP_CANDIDATES[@]}"; do
+    dir="$app/Contents/Resources/terminfo"
+    tried="$tried, $dir"
+    if [ -d "$dir" ]; then
+      if desc=$(TERMINFO="$dir" infocmp -x xterm-ghostty 2>/dev/null); then
+        printf '%s\n' "$desc"
+        return 0
+      fi
+    fi
+  done
+
+  echo "ghostty-terminfo: could not find the xterm-ghostty terminfo description." >&2
+  echo "  Tried: $tried" >&2
+  echo "  Is Ghostty installed somewhere else? Add it to MAC_APP_CANDIDATES." >&2
+  return 1
+}
+
+# Prints the path to a *compiled* xterm-ghostty terminfo entry on stdout -
+# not its content, since the compiled format can contain NUL bytes that a
+# shell variable can't hold. Tries (in order): each macOS app-bundle
+# candidate's bundled copy, a native terminfo db install, then - only if
+# tic/infocmp are actually present - compiling one from resolve_description
+# into a temp dir. Used by cmd_push's tic-less fallback, where there's no
+# `tic` on the remote to hand a description to. Fails loudly, naming every
+# location tried, if none work.
+resolve_compiled_entry() {
+  local app dir sub path
+  local tried="macOS app-bundle terminfo dirs"
+  for app in "${MAC_APP_CANDIDATES[@]}"; do
+    dir="$app/Contents/Resources/terminfo"
+    for sub in 78 x; do
+      path="$dir/$sub/xterm-ghostty"
+      if [ -f "$path" ]; then
+        printf '%s\n' "$path"
+        return 0
+      fi
+    done
+  done
+
+  tried="$tried, /usr/share/terminfo/{x,78}/xterm-ghostty"
+  for sub in x 78; do
+    path="/usr/share/terminfo/$sub/xterm-ghostty"
+    if [ -f "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+
+  if have infocmp && have tic; then
+    tried="$tried, compiling locally via tic"
+    COMPILED_WORKDIR=$(mktemp -d)
+    if resolve_description | tic -x -o "$COMPILED_WORKDIR" - 2>/dev/null; then
+      for sub in x 78; do
+        path="$COMPILED_WORKDIR/$sub/xterm-ghostty"
+        if [ -f "$path" ]; then
+          printf '%s\n' "$path"
+          return 0
+        fi
+      done
+    fi
+  fi
+
+  echo "ghostty-terminfo: could not find a compiled xterm-ghostty terminfo entry." >&2
+  echo "  Tried: $tried" >&2
+  echo "  Is Ghostty installed somewhere else? Add it to MAC_APP_CANDIDATES." >&2
+  return 1
+}
+
+cmd_local() {
+  if have infocmp && have tic; then
+    if infocmp xterm-ghostty >/dev/null 2>&1; then
+      echo "ghostty-terminfo: xterm-ghostty already resolves locally, nothing to do."
+      return 0
+    fi
+    resolve_description | tic -x -
+    echo "ghostty-terminfo: installed xterm-ghostty into ~/.terminfo"
+    return 0
+  fi
+
+  if [ -f "${HOME}/.terminfo/x/xterm-ghostty" ] || [ -f "${HOME}/.terminfo/78/xterm-ghostty" ]; then
+    echo "ghostty-terminfo: xterm-ghostty already resolves locally, nothing to do."
+    return 0
+  fi
+
+  echo "ghostty-terminfo: this machine has no tic/infocmp - OpenWrt's ncurses ships without" >&2
+  echo "  programs, and no package adds them - so 'local' can't compile or verify an entry" >&2
+  echo "  here. Run 'bin/ghostty-terminfo push <this-host>' from the machine running Ghostty" >&2
+  echo "  instead." >&2
+  return 1
+}
+
+# Checks whether xterm-ghostty actually resolves on $1 after a tic-less
+# push, using the same zsh/terminfo trick the .zshrc tput shim relies on -
+# there's no infocmp on that host to ask directly. Some ncurses builds
+# (confirmed on titanium) omit ~/.terminfo auto-lookup ("home-terminfo")
+# entirely, so a plain check can fail even though the entry itself is fine;
+# a second check with $TERMINFO forced tells those two cases apart.
+verify_remote_terminfo() {
+  local host="$1" probe colors
+
+  if ! ssh "$host" -- command -v zsh >/dev/null 2>&1; then
+    echo "ghostty-terminfo: installed the compiled entry on $host (no zsh there to verify with)"
+    return 0
+  fi
+
+  probe='zmodload zsh/terminfo && print -r -- ${terminfo[colors]-}'
+
+  colors=$(ssh "$host" -- "TERM=xterm-ghostty zsh -fc '$probe'" 2>/dev/null || true)
+  if [ "$colors" = "256" ]; then
+    echo "ghostty-terminfo: verified - xterm-ghostty resolves on $host (256 colors)"
+    return 0
+  fi
+
+  colors=$(ssh "$host" -- "TERM=xterm-ghostty TERMINFO=\$HOME/.terminfo zsh -fc '$probe'" 2>/dev/null || true)
+  if [ "$colors" = "256" ]; then
+    echo "ghostty-terminfo: installed the compiled entry on $host, but its ncurses has no" >&2
+    echo "  ~/.terminfo auto-lookup (home-terminfo) built in - confirmed working only with" >&2
+    echo "  \$TERMINFO forced. Add this to ~/.zsh/.zshenv-local on $host:" >&2
+    echo '    export TERMINFO=$HOME/.terminfo' >&2
+  else
+    echo "ghostty-terminfo: warning - could not confirm xterm-ghostty resolves on $host, even" >&2
+    echo "  with \$TERMINFO forced. The compiled entry itself may not match this host's ncurses" >&2
+    echo "  ABI, or it's looking in a directory named in \$TERMINFO_DIRS instead - check both." >&2
+  fi
+}
+
+cmd_push() {
+  if [ "$#" -eq 0 ]; then
+    usage
+  fi
+  local desc entry host remote_script
+  remote_script='
+    set -e
+    mkdir -p "$HOME/.terminfo/x" "$HOME/.terminfo/78" "$HOME/.terminfo/g" "$HOME/.terminfo/67"
+    cat > "$HOME/.terminfo/x/xterm-ghostty"
+    cp "$HOME/.terminfo/x/xterm-ghostty" "$HOME/.terminfo/78/xterm-ghostty"
+    cp "$HOME/.terminfo/x/xterm-ghostty" "$HOME/.terminfo/g/ghostty"
+    cp "$HOME/.terminfo/x/xterm-ghostty" "$HOME/.terminfo/67/ghostty"
+  '
+  for host in "$@"; do
+    echo "ghostty-terminfo: pushing xterm-ghostty to $host..."
+    if ssh "$host" -- command -v tic >/dev/null 2>&1; then
+      desc=$(resolve_description) || return 1
+      printf '%s\n' "$desc" | ssh "$host" -- tic -x -
+      echo "ghostty-terminfo: installed xterm-ghostty on $host via tic"
+      continue
+    fi
+
+    echo "ghostty-terminfo: $host has no tic; copying the compiled entry instead..."
+    entry=$(resolve_compiled_entry) || return 1
+    ssh "$host" -- "$remote_script" < "$entry"
+    verify_remote_terminfo "$host"
+  done
+}
+
+case "${1-}" in
+  local)
+    shift
+    cmd_local "$@"
+    ;;
+  push)
+    shift
+    cmd_push "$@"
+    ;;
+  *)
+    usage
+    ;;
+esac
