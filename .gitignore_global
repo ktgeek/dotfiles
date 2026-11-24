@@ -1,0 +1,15 @@
+*~
+.DS_Store
+
+**/.claude/settings.local.json
+
+# Emacs lock files and auto-save files (made regardless of make-backup-files)
+.#*
+#*#
+
+# vim swap files
+*.swp
+*.swo
+
+# macOS AppleDouble resource forks, left on non-APFS/network volumes
+._*

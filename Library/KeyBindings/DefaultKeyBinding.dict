@@ -1,0 +1,17 @@
+{
+	"^e"="moveToEndOfLine:";
+	"^a"="moveToBeginningOfLine:";
+	"^k"="deleteToEndOfLine:";
+	"^_"="undo:";
+	"~f"="moveWordForward:";
+	"~b"="moveWordBackward:";
+	"~<"="moveToBeginningOfDocument:";
+	"~>"="moveToEndOfDocument:";
+	"~v"="pageUp:";
+	"~d"="deleteWordForward:";
+	"~^h"="deleteWordBackward:";
+	"~\010"="deleteWordBackward:";
+	"~\177"="deleteWordBackward:";
+
+	"\033"="complete:";
+}
